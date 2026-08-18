@@ -74,6 +74,7 @@ def test_orderbook_renders_futu_dictionary_structure():
 
 def test_ticker_renders_trade_fields():
     quote = MagicMock(spec=futu.OpenQuoteContext)
+    quote.subscribe.return_value = (0, None)
     quote.get_rt_ticker.return_value = (
         0,
         pd.DataFrame(
@@ -102,6 +103,45 @@ def test_ticker_renders_trade_fields():
     assert "350.600" in result.stdout
     assert "175300.00" in result.stdout
     assert "BUY" in result.stdout
+    quote.subscribe.assert_called_once_with(
+        ["HK.00700"],
+        [futu.SubType.TICKER],
+        subscribe_push=False,
+    )
+    quote.get_rt_ticker.assert_called_once_with("HK.00700", num=20)
+
+
+def test_ticker_stops_when_subscription_fails():
+    quote = MagicMock(spec=futu.OpenQuoteContext)
+    quote.subscribe.return_value = (1, "subscription denied")
+
+    with patch(
+        "futucli.commands.quote.quote_context",
+        return_value=quote_context_for(quote),
+    ):
+        result = runner.invoke(app, ["quote", "ticker", "HK.00700"])
+
+    assert result.exit_code == 1
+    assert "subscription denied" in result.stdout
+    quote.get_rt_ticker.assert_not_called()
+
+
+def test_ticker_passes_requested_count():
+    quote = MagicMock(spec=futu.OpenQuoteContext)
+    quote.subscribe.return_value = (0, None)
+    quote.get_rt_ticker.return_value = (0, pd.DataFrame())
+
+    with patch(
+        "futucli.commands.quote.quote_context",
+        return_value=quote_context_for(quote),
+    ):
+        result = runner.invoke(
+            app,
+            ["quote", "ticker", "HK.00700", "--count", "5"],
+        )
+
+    assert result.exit_code == 0
+    quote.get_rt_ticker.assert_called_once_with("HK.00700", num=5)
 
 
 def test_kline_rejects_unknown_type_before_opening_connection():

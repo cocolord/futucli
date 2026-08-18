@@ -124,10 +124,26 @@ def kline(
 
 
 @quote_app.command()
-def ticker(code: str = typer.Argument(..., help="Stock code, e.g. HK.00700")):
+def ticker(
+    code: str = typer.Argument(..., help="Stock code, e.g. HK.00700"),
+    count: int = typer.Option(
+        20,
+        min=1,
+        max=1000,
+        help="Number of recent trades",
+    ),
+):
     """Get real-time ticker (price, change, turnover)."""
     with quote_context() as quote:
-        ret, data = quote.get_rt_ticker(code)
+        ret, data = quote.subscribe(
+            [code],
+            [futu.SubType.TICKER],
+            subscribe_push=False,
+        )
+        if ret != 0:
+            console.print(f"[red]Error: {data}[/red]")
+            raise typer.Exit(1)
+        ret, data = quote.get_rt_ticker(code, num=count)
     if ret != 0:
         console.print(f"[red]Error: {data}[/red]")
         raise typer.Exit(1)

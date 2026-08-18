@@ -42,6 +42,9 @@ futucli quote kline HK.00700 --ktype K_DAY --count 50
 # Get real-time ticker
 futucli quote ticker HK.00700
 
+# Limit ticker output to the five most recent trades
+futucli quote ticker HK.00700 --count 5
+
 # View account info
 futucli trade account
 
