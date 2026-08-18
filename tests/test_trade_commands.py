@@ -2,9 +2,9 @@ from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
-from futu import ModifyOrderOp, OpenSecTradeContext, OrderType, TrdEnv, TrdSide
 from typer.testing import CliRunner
 
+from futucli import futu
 from futucli.cli import app
 
 runner = CliRunner()
@@ -16,7 +16,7 @@ def trade_context_for(trade):
 
 
 def test_account_renders_wide_account_row_as_field_value_pairs():
-    trade = MagicMock(spec=OpenSecTradeContext)
+    trade = MagicMock(spec=futu.OpenSecTradeContext)
     trade.accinfo_query.return_value = (
         0,
         pd.DataFrame(
@@ -32,7 +32,10 @@ def test_account_renders_wide_account_row_as_field_value_pairs():
     )
 
     with (
-        patch("futucli.commands.trade.get_trade_env", return_value=TrdEnv.SIMULATE),
+        patch(
+            "futucli.commands.trade.get_trade_env",
+            return_value=futu.TrdEnv.SIMULATE,
+        ),
         patch(
             "futucli.commands.trade.trade_context",
             return_value=trade_context_for(trade),
@@ -47,15 +50,18 @@ def test_account_renders_wide_account_row_as_field_value_pairs():
     assert "80000.0" in result.stdout
     assert "market_val" in result.stdout
     context_factory.assert_called_once_with()
-    trade.accinfo_query.assert_called_once_with(trd_env=TrdEnv.SIMULATE)
+    trade.accinfo_query.assert_called_once_with(trd_env=futu.TrdEnv.SIMULATE)
 
 
 def test_order_passes_explicit_valid_enums_to_sdk():
-    trade = MagicMock(spec=OpenSecTradeContext)
+    trade = MagicMock(spec=futu.OpenSecTradeContext)
     trade.place_order.return_value = (0, pd.DataFrame([{"order_id": "123"}]))
 
     with (
-        patch("futucli.commands.trade.get_trade_env", return_value=TrdEnv.SIMULATE),
+        patch(
+            "futucli.commands.trade.get_trade_env",
+            return_value=futu.TrdEnv.SIMULATE,
+        ),
         patch(
             "futucli.commands.trade.trade_context",
             return_value=trade_context_for(trade),
@@ -81,9 +87,9 @@ def test_order_passes_explicit_valid_enums_to_sdk():
         price=350.0,
         qty=100,
         code="HK.00700",
-        trd_side=TrdSide.SELL,
-        order_type=OrderType.MARKET,
-        trd_env=TrdEnv.SIMULATE,
+        trd_side=futu.TrdSide.SELL,
+        order_type=futu.OrderType.MARKET,
+        trd_env=futu.TrdEnv.SIMULATE,
     )
 
 
@@ -137,7 +143,7 @@ def test_order_help_documents_normal_as_limit_order():
 
 
 def test_positions_renders_position_rows():
-    trade = MagicMock(spec=OpenSecTradeContext)
+    trade = MagicMock(spec=futu.OpenSecTradeContext)
     trade.position_list_query.return_value = (
         0,
         pd.DataFrame(
@@ -155,7 +161,10 @@ def test_positions_renders_position_rows():
     )
 
     with (
-        patch("futucli.commands.trade.get_trade_env", return_value=TrdEnv.SIMULATE),
+        patch(
+            "futucli.commands.trade.get_trade_env",
+            return_value=futu.TrdEnv.SIMULATE,
+        ),
         patch(
             "futucli.commands.trade.trade_context",
             return_value=trade_context_for(trade),
@@ -167,15 +176,18 @@ def test_positions_renders_position_rows():
     assert "HK.00700" in result.stdout
     assert "Tencent" in result.stdout
     assert "1000.00" in result.stdout
-    trade.position_list_query.assert_called_once_with(trd_env=TrdEnv.SIMULATE)
+    trade.position_list_query.assert_called_once_with(trd_env=futu.TrdEnv.SIMULATE)
 
 
 def test_cancel_passes_sdk_cancel_enum():
-    trade = MagicMock(spec=OpenSecTradeContext)
+    trade = MagicMock(spec=futu.OpenSecTradeContext)
     trade.modify_order.return_value = (0, pd.DataFrame())
 
     with (
-        patch("futucli.commands.trade.get_trade_env", return_value=TrdEnv.SIMULATE),
+        patch(
+            "futucli.commands.trade.get_trade_env",
+            return_value=futu.TrdEnv.SIMULATE,
+        ),
         patch(
             "futucli.commands.trade.trade_context",
             return_value=trade_context_for(trade),
@@ -186,16 +198,16 @@ def test_cancel_passes_sdk_cancel_enum():
     assert result.exit_code == 0
     assert "order-123" in result.stdout
     trade.modify_order.assert_called_once_with(
-        modify_order_op=ModifyOrderOp.CANCEL,
+        modify_order_op=futu.ModifyOrderOp.CANCEL,
         order_id="order-123",
         qty=0,
         price=0,
-        trd_env=TrdEnv.SIMULATE,
+        trd_env=futu.TrdEnv.SIMULATE,
     )
 
 
 def test_orders_renders_today_orders():
-    trade = MagicMock(spec=OpenSecTradeContext)
+    trade = MagicMock(spec=futu.OpenSecTradeContext)
     trade.order_list_query.return_value = (
         0,
         pd.DataFrame(
@@ -213,7 +225,10 @@ def test_orders_renders_today_orders():
     )
 
     with (
-        patch("futucli.commands.trade.get_trade_env", return_value=TrdEnv.SIMULATE),
+        patch(
+            "futucli.commands.trade.get_trade_env",
+            return_value=futu.TrdEnv.SIMULATE,
+        ),
         patch(
             "futucli.commands.trade.trade_context",
             return_value=trade_context_for(trade),
@@ -225,4 +240,4 @@ def test_orders_renders_today_orders():
     assert "order-123" in result.stdout
     assert "HK.00700" in result.stdout
     assert "SUBMITTED" in result.stdout
-    trade.order_list_query.assert_called_once_with(trd_env=TrdEnv.SIMULATE)
+    trade.order_list_query.assert_called_once_with(trd_env=futu.TrdEnv.SIMULATE)

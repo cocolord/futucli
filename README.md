@@ -76,7 +76,13 @@ Override via environment variables:
 export FUTU_HOST=192.168.1.100
 export FUTU_PORT=11111
 export FUTU_TRADE_ENV=REAL
+export FUTUCLI_SDK_HOME=/path/to/writable/runtime-dir
 ```
+
+`FUTUCLI_SDK_HOME` is optional. It controls the root where the Futu Python SDK
+writes runtime logs. By default, `futucli` uses a per-user directory under the
+system temporary directory so that read-only or sandboxed agents do not need
+write access to `~/.com.futunn.FutuOpenD/Log`.
 
 Or create `~/.config/futucli/config.toml`:
 

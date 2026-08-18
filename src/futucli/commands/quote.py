@@ -3,10 +3,10 @@
 from enum import Enum
 
 import typer
-from futu import KLType
 from rich.console import Console
 from rich.table import Table
 
+from .. import futu
 from ..connection import quote_context
 
 console = Console()
@@ -92,7 +92,7 @@ def kline(
     count: int = typer.Option(100, help="Number of bars"),
 ):
     """Get historical K-line data."""
-    sdk_ktype = getattr(KLType, ktype.value)
+    sdk_ktype = getattr(futu.KLType, ktype.value)
     with quote_context() as quote:
         ret, data, _ = quote.request_history_kline(
             code,

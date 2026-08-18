@@ -1,16 +1,15 @@
 from unittest.mock import patch
 
 import pytest
-from futu import SecurityFirm, TrdEnv
 
-from futucli import connection
+from futucli import connection, futu
 
 
 def test_quote_context_opens_and_closes_for_one_command():
     with (
         patch.object(connection.config, "get_host", return_value="quote-host"),
         patch.object(connection.config, "get_port", return_value=12345),
-        patch.object(connection, "OpenQuoteContext", autospec=True) as context_class,
+        patch.object(connection.futu, "OpenQuoteContext", autospec=True) as context_class,
     ):
         context = context_class.return_value
 
@@ -24,10 +23,10 @@ def test_quote_context_opens_and_closes_for_one_command():
 def test_quote_context_closes_when_command_raises():
     with patch.object(
         connection,
-        "OpenQuoteContext",
+        "futu",
         autospec=True,
-    ) as context_class:
-        context = context_class.return_value
+    ) as futu_module:
+        context = futu_module.OpenQuoteContext.return_value
 
         with pytest.raises(RuntimeError, match="command failed"):
             with connection.quote_context():
@@ -40,7 +39,7 @@ def test_trade_context_opens_and_closes_for_one_command():
     with (
         patch.object(connection.config, "get_host", return_value="trade-host"),
         patch.object(connection.config, "get_port", return_value=23456),
-        patch.object(connection, "OpenSecTradeContext", autospec=True) as context_class,
+        patch.object(connection.futu, "OpenSecTradeContext", autospec=True) as context_class,
     ):
         context = context_class.return_value
 
@@ -50,7 +49,7 @@ def test_trade_context_opens_and_closes_for_one_command():
         context_class.assert_called_once_with(
             host="trade-host",
             port=23456,
-            security_firm=SecurityFirm.FUTUSECURITIES,
+            security_firm=futu.SecurityFirm.FUTUSECURITIES,
         )
         context.close.assert_called_once_with()
 
@@ -58,8 +57,8 @@ def test_trade_context_opens_and_closes_for_one_command():
 @pytest.mark.parametrize(
     ("configured", "expected"),
     [
-        pytest.param("REAL", TrdEnv.REAL, id="real"),
-        pytest.param("simulate", TrdEnv.SIMULATE, id="simulate_case_insensitive"),
+        pytest.param("REAL", futu.TrdEnv.REAL, id="real"),
+        pytest.param("simulate", futu.TrdEnv.SIMULATE, id="simulate_case_insensitive"),
     ],
 )
 def test_get_trade_env_accepts_supported_values(configured, expected):

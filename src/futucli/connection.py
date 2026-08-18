@@ -2,15 +2,14 @@
 
 from contextlib import contextmanager
 
-from futu import OpenQuoteContext, OpenSecTradeContext, SecurityFirm, TrdEnv
-
+from . import futu
 from . import config
 
 
 @contextmanager
 def quote_context():
     """Open a quote connection for one CLI command."""
-    context = OpenQuoteContext(host=config.get_host(), port=config.get_port())
+    context = futu.OpenQuoteContext(host=config.get_host(), port=config.get_port())
     try:
         yield context
     finally:
@@ -20,10 +19,10 @@ def quote_context():
 @contextmanager
 def trade_context():
     """Open a trade connection for one CLI command."""
-    context = OpenSecTradeContext(
+    context = futu.OpenSecTradeContext(
         host=config.get_host(),
         port=config.get_port(),
-        security_firm=SecurityFirm.FUTUSECURITIES,
+        security_firm=futu.SecurityFirm.FUTUSECURITIES,
     )
     try:
         yield context
@@ -43,12 +42,12 @@ def check_connections() -> dict:
             }
 
 
-def get_trade_env() -> TrdEnv:
+def get_trade_env():
     env = config.get_trade_env().upper()
     if env == "REAL":
-        return TrdEnv.REAL
+        return futu.TrdEnv.REAL
     if env == "SIMULATE":
-        return TrdEnv.SIMULATE
+        return futu.TrdEnv.SIMULATE
     raise ValueError(
         f"Invalid trade_env {env!r}; expected REAL or SIMULATE."
     )

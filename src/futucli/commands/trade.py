@@ -3,10 +3,10 @@
 from enum import Enum
 
 import typer
-from futu import ModifyOrderOp, OrderType, TrdSide
 from rich.console import Console
 from rich.table import Table
 
+from .. import futu
 from ..connection import get_trade_env, trade_context
 
 console = Console()
@@ -86,8 +86,8 @@ def order(
 ):
     """Place an order."""
     trd_env = get_trade_env()
-    trd_side = getattr(TrdSide, side.value)
-    sdk_order_type = getattr(OrderType, order_type.value)
+    trd_side = getattr(futu.TrdSide, side.value)
+    sdk_order_type = getattr(futu.OrderType, order_type.value)
 
     with trade_context() as trade:
         ret, data = trade.place_order(
@@ -111,7 +111,7 @@ def cancel(order_id: str = typer.Argument(..., help="Order ID to cancel")):
     trd_env = get_trade_env()
     with trade_context() as trade:
         ret, data = trade.modify_order(
-            modify_order_op=ModifyOrderOp.CANCEL,
+            modify_order_op=futu.ModifyOrderOp.CANCEL,
             order_id=order_id,
             qty=0,
             price=0,

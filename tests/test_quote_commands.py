@@ -2,9 +2,9 @@ from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
-from futu import KLType, OpenQuoteContext
 from typer.testing import CliRunner
 
+from futucli import futu
 from futucli.cli import app
 
 runner = CliRunner()
@@ -16,7 +16,7 @@ def quote_context_for(quote):
 
 
 def test_snapshot_opens_command_scoped_connection_and_renders_data():
-    quote = MagicMock(spec=OpenQuoteContext)
+    quote = MagicMock(spec=futu.OpenQuoteContext)
     quote.get_market_snapshot.return_value = (
         0,
         pd.DataFrame(
@@ -49,7 +49,7 @@ def test_snapshot_opens_command_scoped_connection_and_renders_data():
 
 
 def test_orderbook_renders_futu_dictionary_structure():
-    quote = MagicMock(spec=OpenQuoteContext)
+    quote = MagicMock(spec=futu.OpenQuoteContext)
     quote.get_order_book.return_value = (
         0,
         {
@@ -73,7 +73,7 @@ def test_orderbook_renders_futu_dictionary_structure():
 
 
 def test_ticker_renders_trade_fields():
-    quote = MagicMock(spec=OpenQuoteContext)
+    quote = MagicMock(spec=futu.OpenQuoteContext)
     quote.get_rt_ticker.return_value = (
         0,
         pd.DataFrame(
@@ -117,7 +117,7 @@ def test_kline_rejects_unknown_type_before_opening_connection():
 
 
 def test_kline_passes_valid_sdk_type():
-    quote = MagicMock(spec=OpenQuoteContext)
+    quote = MagicMock(spec=futu.OpenQuoteContext)
     quote.request_history_kline.return_value = (
         0,
         pd.DataFrame(
@@ -147,6 +147,6 @@ def test_kline_passes_valid_sdk_type():
     assert result.exit_code == 0
     quote.request_history_kline.assert_called_once_with(
         "HK.00700",
-        ktype=KLType.K_DAY,
+        ktype=futu.KLType.K_DAY,
         max_count=1,
     )
