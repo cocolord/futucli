@@ -1,6 +1,8 @@
 """futucli — CLI for Futu OpenAPI."""
 
 import os
+import shutil
+import subprocess
 
 import typer
 from rich.console import Console
@@ -19,6 +21,7 @@ app.add_typer(quote_app, name="quote")
 app.add_typer(trade_app, name="trade")
 
 console = Console()
+GITHUB_REPOSITORY = "git+https://github.com/cocolord/futucli.git"
 
 
 @app.command()
@@ -59,6 +62,28 @@ def config():
     table.add_row("port", str(cfg.get_port()), port_src)
     table.add_row("trade_env", cfg.get_trade_env(), env_src)
     console.print(table)
+
+
+@app.command()
+def upgrade():
+    """Upgrade futucli from the GitHub repository."""
+    uv_path = shutil.which("uv")
+    command = ["uv", "tool", "install", "--force", GITHUB_REPOSITORY]
+
+    if uv_path is None:
+        console.print("[red]Upgrade requires uv, but it was not found on PATH.[/red]")
+        console.print(f"Run manually: {' '.join(command)}")
+        raise typer.Exit(1)
+
+    command[0] = uv_path
+    console.print(f"Upgrading futucli from {GITHUB_REPOSITORY}...")
+    result = subprocess.run(command, check=False)
+    if result.returncode != 0:
+        console.print("[red]Upgrade failed.[/red]")
+        console.print(f"Retry manually: {' '.join(command)}")
+        raise typer.Exit(result.returncode)
+
+    console.print("[green]Upgrade complete. Run futucli again to use the new version.[/green]")
 
 
 if __name__ == "__main__":

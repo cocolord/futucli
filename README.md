@@ -21,6 +21,12 @@ cd futucli
 pip install -e .
 ```
 
+Upgrade a `uv tool` installation from GitHub:
+
+```bash
+futucli upgrade
+```
+
 ## Quick Start
 
 ```bash
@@ -102,6 +108,7 @@ trade_env = "SIMULATE"
 | `futucli connect` | Check FutuOpenD connectivity |
 | `futucli status` | Check FutuOpenD connectivity |
 | `futucli config` | Show current configuration |
+| `futucli upgrade` | Upgrade from the GitHub repository using `uv` |
 | `futucli quote snapshot CODES...` | Real-time market snapshot |
 | `futucli quote orderbook CODE` | Order book (bid/ask) |
 | `futucli quote kline CODE` | Historical K-line data |

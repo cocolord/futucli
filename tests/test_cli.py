@@ -1,8 +1,9 @@
+import subprocess
 from unittest.mock import patch
 
 from typer.testing import CliRunner
 
-from futucli.cli import app
+from futucli.cli import GITHUB_REPOSITORY, app
 
 runner = CliRunner()
 
@@ -31,3 +32,51 @@ def test_root_help_does_not_claim_persistent_disconnect():
 
     assert result.exit_code == 0
     assert "disconnect" not in result.stdout
+
+
+def test_upgrade_installs_latest_github_version_with_uv():
+    completed_process = subprocess.CompletedProcess([], 0)
+
+    with (
+        patch("futucli.cli.shutil.which", return_value="/usr/local/bin/uv"),
+        patch(
+            "futucli.cli.subprocess.run",
+            return_value=completed_process,
+        ) as run,
+    ):
+        result = runner.invoke(app, ["upgrade"])
+
+    assert result.exit_code == 0
+    run.assert_called_once_with(
+        [
+            "/usr/local/bin/uv",
+            "tool",
+            "install",
+            "--force",
+            GITHUB_REPOSITORY,
+        ],
+        check=False,
+    )
+    assert "Upgrade complete" in result.stdout
+
+
+def test_upgrade_exits_with_install_instructions_without_uv():
+    with patch("futucli.cli.shutil.which", return_value=None):
+        result = runner.invoke(app, ["upgrade"])
+
+    assert result.exit_code == 1
+    assert "requires uv" in result.stdout
+    assert "uv tool install --force" in result.stdout
+
+
+def test_upgrade_propagates_uv_failure():
+    completed_process = subprocess.CompletedProcess([], 2)
+
+    with (
+        patch("futucli.cli.shutil.which", return_value="/usr/local/bin/uv"),
+        patch("futucli.cli.subprocess.run", return_value=completed_process),
+    ):
+        result = runner.invoke(app, ["upgrade"])
+
+    assert result.exit_code == 2
+    assert "Upgrade failed" in result.stdout
