@@ -2,6 +2,7 @@
 
 from enum import Enum
 
+import pandas as pd
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -38,20 +39,31 @@ def snapshot(codes: list[str] = typer.Argument(..., help="Stock codes, e.g. HK.0
     table.add_column("Code")
     table.add_column("Name")
     table.add_column("Price")
+    table.add_column("Prev Close")
     table.add_column("Change %")
     table.add_column("Volume")
     table.add_column("High")
     table.add_column("Low")
 
     for _, row in data.iterrows():
+        last_price = row.get("last_price")
+        prev_close_price = row.get("prev_close_price")
+        change_rate = (
+            (last_price - prev_close_price) / prev_close_price * 100
+            if pd.notna(last_price)
+            and pd.notna(prev_close_price)
+            and prev_close_price != 0
+            else None
+        )
         table.add_row(
             row["code"],
             str(row.get("name", "")),
-            f"{row.get('last_price', '-'):.3f}" if row.get("last_price") else "-",
-            f"{row.get('change_rate', 0):.2f}%",
+            f"{last_price:.3f}" if pd.notna(last_price) else "-",
+            f"{prev_close_price:.3f}" if pd.notna(prev_close_price) else "-",
+            f"{change_rate:.2f}%" if change_rate is not None else "-",
             f"{row.get('volume', 0):,}",
-            f"{row.get('high_price', '-'):.3f}" if row.get("high_price") else "-",
-            f"{row.get('low_price', '-'):.3f}" if row.get("low_price") else "-",
+            f"{row.get('high_price', '-'):.3f}" if pd.notna(row.get("high_price")) else "-",
+            f"{row.get('low_price', '-'):.3f}" if pd.notna(row.get("low_price")) else "-",
         )
     console.print(table)
 

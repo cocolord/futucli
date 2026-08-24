@@ -25,7 +25,7 @@ def test_snapshot_opens_command_scoped_connection_and_renders_data():
                     "code": "HK.00700",
                     "name": "Tencent",
                     "last_price": 350.2,
-                    "change_rate": 1.25,
+                    "prev_close_price": 345.0,
                     "volume": 1000,
                     "high_price": 355.0,
                     "low_price": 345.0,
@@ -41,11 +41,40 @@ def test_snapshot_opens_command_scoped_connection_and_renders_data():
         result = runner.invoke(app, ["quote", "snapshot", "HK.00700"])
 
     assert result.exit_code == 0
-    assert "HK.00700" in result.stdout
-    assert "Tencent" in result.stdout
     assert "350.200" in result.stdout
+    assert "345.000" in result.stdout
+    assert "1.51%" in result.stdout
     context_factory.assert_called_once_with()
     quote.get_market_snapshot.assert_called_once_with(["HK.00700"])
+
+
+def test_snapshot_shows_unknown_change_when_prev_close_is_missing():
+    quote = MagicMock(spec=futu.OpenQuoteContext)
+    quote.get_market_snapshot.return_value = (
+        0,
+        pd.DataFrame(
+            [
+                {
+                    "code": "HK.00700",
+                    "name": "Tencent",
+                    "last_price": 350.2,
+                    "volume": 1000,
+                    "high_price": 355.0,
+                    "low_price": 345.0,
+                }
+            ]
+        ),
+    )
+
+    with patch(
+        "futucli.commands.quote.quote_context",
+        return_value=quote_context_for(quote),
+    ):
+        result = runner.invoke(app, ["quote", "snapshot", "HK.00700"])
+
+    assert result.exit_code == 0
+    assert "0.00%" not in result.stdout
+    assert "350.200" in result.stdout
 
 
 def test_orderbook_renders_futu_dictionary_structure():
