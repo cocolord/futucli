@@ -89,7 +89,10 @@ def orderbook(code: str = typer.Argument(..., help="Stock code, e.g. HK.00700"))
 def kline(
     code: str = typer.Argument(..., help="Stock code, e.g. HK.00700"),
     ktype: KlineType = typer.Option(KlineType.K_DAY, help="K-line type"),
-    count: int = typer.Option(100, help="Number of bars"),
+    count: int = typer.Option(
+        30,
+        help="Number of bars (defaults to about 30 trading days for K_DAY)",
+    ),
 ):
     """Get historical K-line data."""
     sdk_ktype = getattr(futu.KLType, ktype.value)

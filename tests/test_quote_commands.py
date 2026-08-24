@@ -156,6 +156,24 @@ def test_kline_rejects_unknown_type_before_opening_connection():
     context_factory.assert_not_called()
 
 
+def test_kline_defaults_to_30_bars():
+    quote = MagicMock(spec=futu.OpenQuoteContext)
+    quote.request_history_kline.return_value = (0, pd.DataFrame(), None)
+
+    with patch(
+        "futucli.commands.quote.quote_context",
+        return_value=quote_context_for(quote),
+    ):
+        result = runner.invoke(app, ["quote", "kline", "HK.00700"])
+
+    assert result.exit_code == 0
+    quote.request_history_kline.assert_called_once_with(
+        "HK.00700",
+        ktype=futu.KLType.K_DAY,
+        max_count=30,
+    )
+
+
 def test_kline_passes_valid_sdk_type():
     quote = MagicMock(spec=futu.OpenQuoteContext)
     quote.request_history_kline.return_value = (
