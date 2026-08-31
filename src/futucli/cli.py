@@ -1,5 +1,6 @@
 """futucli — CLI for Futu OpenAPI."""
 
+from importlib.metadata import PackageNotFoundError, version
 import os
 import shutil
 import subprocess
@@ -16,12 +17,39 @@ from .connection import check_connections
 app = typer.Typer(
     name="futucli",
     help="CLI for Futu OpenAPI — market data and trading from the terminal.",
+    invoke_without_command=True,
 )
 app.add_typer(quote_app, name="quote")
 app.add_typer(trade_app, name="trade")
 
 console = Console()
 GITHUB_REPOSITORY = "git+https://github.com/cocolord/futucli.git"
+try:
+    APP_VERSION = version("futucli")
+except PackageNotFoundError:
+    APP_VERSION = "unknown"
+
+
+@app.callback()
+def validate_runtime_configuration(
+    context: typer.Context,
+    show_version: bool = typer.Option(
+        False,
+        "--version",
+        help="Show version and exit.",
+        is_eager=True,
+    ),
+):
+    """Fail fast on invalid connection settings before opening an SDK context."""
+    if show_version:
+        typer.echo(f"futucli {APP_VERSION}")
+        raise typer.Exit()
+    if context.invoked_subcommand in {"connect", "status", "quote", "trade"}:
+        try:
+            cfg.get_timeout_seconds()
+        except ValueError as error:
+            console.print(f"[red]Configuration error: {error}[/red]")
+            raise typer.Exit(2) from error
 
 
 @app.command()

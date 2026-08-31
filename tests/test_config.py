@@ -4,6 +4,10 @@ import sys
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
+from futucli import config
+
 
 def test_config_imports_tomli_when_tomllib_is_unavailable():
     config_path = Path(__file__).parents[1] / "src" / "futucli" / "config.py"
@@ -23,3 +27,24 @@ def test_config_imports_tomli_when_tomllib_is_unavailable():
         spec.loader.exec_module(module)
 
     assert module.tomllib is sys.modules["tomllib"]
+
+
+def test_timeout_defaults_to_10_seconds():
+    with patch.dict("os.environ", {}, clear=True), patch.object(
+        config,
+        "_load_config",
+        return_value={},
+    ):
+        assert config.get_timeout_seconds() == 10
+
+
+def test_timeout_reads_environment_override():
+    with patch.dict("os.environ", {"FUTU_TIMEOUT_SECONDS": "8"}):
+        assert config.get_timeout_seconds() == 8
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "not-a-number"])
+def test_timeout_rejects_invalid_values(value):
+    with patch.dict("os.environ", {"FUTU_TIMEOUT_SECONDS": value}):
+        with pytest.raises(ValueError, match="positive integer"):
+            config.get_timeout_seconds()

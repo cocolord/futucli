@@ -21,9 +21,11 @@ def test_sdk_logs_do_not_require_writable_user_home(tmp_path):
             "-c",
             (
                 "import os; "
+                "from futucli import futu; "
                 "from futucli.cli import app; "
                 "print(os.environ['HOME']); "
-                "print(app.info.name)"
+                "print(app.info.name); "
+                "print(futu.SysConfig.enable_console_log)"
             ),
         ],
         env=env,

@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 from typer.testing import CliRunner
 
-from futucli.cli import GITHUB_REPOSITORY, app
+from futucli.cli import APP_VERSION, GITHUB_REPOSITORY, app
 
 runner = CliRunner()
 
@@ -32,6 +32,13 @@ def test_root_help_does_not_claim_persistent_disconnect():
 
     assert result.exit_code == 0
     assert "disconnect" not in result.stdout
+
+
+def test_version_reports_installed_package_version():
+    result = runner.invoke(app, ["--version"])
+
+    assert result.exit_code == 0
+    assert result.stdout == f"futucli {APP_VERSION}\n"
 
 
 def test_upgrade_installs_latest_github_version_with_uv():
@@ -80,3 +87,14 @@ def test_upgrade_propagates_uv_failure():
 
     assert result.exit_code == 2
     assert "Upgrade failed" in result.stdout
+
+
+def test_market_commands_fail_fast_for_invalid_timeout(monkeypatch):
+    monkeypatch.setenv("FUTU_TIMEOUT_SECONDS", "not-a-number")
+
+    result = runner.invoke(app, ["quote", "snapshot", "SH.510300"])
+
+    assert result.exit_code == 2
+    assert "Configuration error" in result.stdout
+    assert "positive\ninteger" in result.stdout
+    assert "Traceback" not in result.stdout

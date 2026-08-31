@@ -1,7 +1,10 @@
 from contextlib import contextmanager
+import csv
+import json
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
+import pytest
 from typer.testing import CliRunner
 
 from futucli import futu
@@ -25,10 +28,22 @@ def test_snapshot_opens_command_scoped_connection_and_renders_data():
                     "code": "HK.00700",
                     "name": "Tencent",
                     "last_price": 350.2,
+                    "overnight_price": 349.8,
                     "prev_close_price": 345.0,
                     "volume": 1000,
                     "high_price": 355.0,
                     "low_price": 345.0,
+                }
+            ]
+        ),
+    )
+    quote.get_market_state.return_value = (
+        0,
+        pd.DataFrame(
+            [
+                {
+                    "code": "HK.00700",
+                    "market_state": "MORNING",
                 }
             ]
         ),
@@ -42,10 +57,18 @@ def test_snapshot_opens_command_scoped_connection_and_renders_data():
 
     assert result.exit_code == 0
     assert "350.200" in result.stdout
+    assert "349.800" in result.stdout
     assert "345.000" in result.stdout
     assert "1.51%" in result.stdout
+    assert "Last Price" in result.stdout
+    assert "Overnight Price" in result.stdout
+    assert "Snapshot Metadata" in result.stdout
+    assert "SDK Update Time" in result.stdout
+    assert "Snapshot Freshness" not in result.stdout
+    assert "MORNING" in result.stdout
     context_factory.assert_called_once_with()
     quote.get_market_snapshot.assert_called_once_with(["HK.00700"])
+    quote.get_market_state.assert_called_once_with(["HK.00700"])
 
 
 def test_snapshot_shows_unknown_change_when_prev_close_is_missing():
@@ -65,6 +88,7 @@ def test_snapshot_shows_unknown_change_when_prev_close_is_missing():
             ]
         ),
     )
+    quote.get_market_state.return_value = (1, "market state unavailable")
 
     with patch(
         "futucli.commands.quote.quote_context",
@@ -75,6 +99,128 @@ def test_snapshot_shows_unknown_change_when_prev_close_is_missing():
     assert result.exit_code == 0
     assert "0.00%" not in result.stdout
     assert "350.200" in result.stdout
+    assert "Snapshot Metadata" in result.stdout
+
+
+def test_snapshot_json_outputs_machine_readable_records():
+    quote = MagicMock(spec=futu.OpenQuoteContext)
+    quote.get_market_snapshot.return_value = (
+        0,
+        pd.DataFrame(
+            [
+                {
+                    "code": "US.MU",
+                    "name": "Micron",
+                    "update_time": "2026-08-24 03:55:00",
+                    "last_price": 932.86,
+                    "overnight_price": 919.79,
+                    "prev_close_price": 974.33,
+                    "volume": 1000,
+                    "high_price": 989.96,
+                    "low_price": 958.2,
+                }
+            ]
+        ),
+    )
+    quote.get_market_state.return_value = (
+        0,
+        pd.DataFrame([{"code": "US.MU", "market_state": "OVERNIGHT"}]),
+    )
+
+    with (
+        patch(
+            "futucli.commands.quote.quote_context",
+            return_value=quote_context_for(quote),
+        ),
+        patch("futucli.commands.quote.futu.SysConfig.enable_console_log") as disable_logs,
+    ):
+        result = runner.invoke(app, ["quote", "snapshot", "US.MU", "--json"])
+
+    assert result.exit_code == 0
+    [record] = json.loads(result.stdout)
+    assert record == {
+        "code": "US.MU",
+        "name": "Micron",
+        "update_time": "2026-08-24 03:55:00",
+        "market_state": "OVERNIGHT",
+        "currency": "USD",
+        "last_price": 932.86,
+        "overnight_price": 919.79,
+        "prev_close_price": 974.33,
+        "change_rate": record["change_rate"],
+        "volume": 1000,
+        "high_price": 989.96,
+        "low_price": 958.2,
+    }
+    assert record["change_rate"] == pytest.approx(
+        (932.86 - 974.33) / 974.33 * 100
+    )
+    disable_logs.assert_called_once_with(False)
+
+
+def test_snapshot_csv_outputs_fixed_columns():
+    quote = MagicMock(spec=futu.OpenQuoteContext)
+    quote.get_market_snapshot.return_value = (
+        0,
+        pd.DataFrame(
+            [
+                {
+                    "code": "SH.510300",
+                    "name": "CSI 300 ETF",
+                    "update_time": "2026-08-24 15:00:00",
+                    "last_price": 4.62,
+                    "prev_close_price": 4.68,
+                    "volume": 1000,
+                    "high_price": 4.692,
+                    "low_price": 4.593,
+                }
+            ]
+        ),
+    )
+    quote.get_market_state.return_value = (
+        0,
+        pd.DataFrame(
+            [{"code": "SH.510300", "market_state": "ASHARE_AFTER_HOURS_END"}]
+        ),
+    )
+
+    with (
+        patch(
+            "futucli.commands.quote.quote_context",
+            return_value=quote_context_for(quote),
+        ),
+        patch("futucli.commands.quote.futu.SysConfig.enable_console_log"),
+    ):
+        result = runner.invoke(app, ["quote", "snapshot", "SH.510300", "--csv"])
+
+    assert result.exit_code == 0
+    rows = list(csv.DictReader(result.stdout.splitlines()))
+    assert rows == [
+        {
+            "code": "SH.510300",
+            "name": "CSI 300 ETF",
+            "update_time": "2026-08-24 15:00:00",
+            "market_state": "ASHARE_AFTER_HOURS_END",
+            "currency": "CNY",
+            "last_price": "4.62",
+            "overnight_price": "",
+            "prev_close_price": "4.68",
+            "change_rate": str((4.62 - 4.68) / 4.68 * 100),
+            "volume": "1000",
+            "high_price": "4.692",
+            "low_price": "4.593",
+        }
+    ]
+
+
+def test_snapshot_rejects_combined_json_and_csv_options():
+    result = runner.invoke(
+        app,
+        ["quote", "snapshot", "HK.00700", "--json", "--csv"],
+    )
+
+    assert result.exit_code == 2
+    assert "Choose either --json or --csv" in result.stdout
 
 
 def test_orderbook_renders_futu_dictionary_structure():
@@ -187,7 +333,8 @@ def test_kline_rejects_unknown_type_before_opening_connection():
 
 def test_kline_defaults_to_30_bars():
     quote = MagicMock(spec=futu.OpenQuoteContext)
-    quote.request_history_kline.return_value = (0, pd.DataFrame(), None)
+    quote.subscribe.return_value = (0, None)
+    quote.get_cur_kline.return_value = (0, pd.DataFrame())
 
     with patch(
         "futucli.commands.quote.quote_context",
@@ -196,16 +343,37 @@ def test_kline_defaults_to_30_bars():
         result = runner.invoke(app, ["quote", "kline", "HK.00700"])
 
     assert result.exit_code == 0
-    quote.request_history_kline.assert_called_once_with(
-        "HK.00700",
-        ktype=futu.KLType.K_DAY,
-        max_count=30,
+    quote.subscribe.assert_called_once_with(
+        ["HK.00700"],
+        [futu.SubType.K_DAY],
+        subscribe_push=False,
     )
+    quote.get_cur_kline.assert_called_once_with(
+        "HK.00700",
+        30,
+        ktype=futu.KLType.K_DAY,
+    )
+
+
+def test_kline_stops_when_subscription_fails():
+    quote = MagicMock(spec=futu.OpenQuoteContext)
+    quote.subscribe.return_value = (1, "subscription denied")
+
+    with patch(
+        "futucli.commands.quote.quote_context",
+        return_value=quote_context_for(quote),
+    ):
+        result = runner.invoke(app, ["quote", "kline", "HK.00700"])
+
+    assert result.exit_code == 1
+    assert "subscription denied" in result.stdout
+    quote.get_cur_kline.assert_not_called()
 
 
 def test_kline_passes_valid_sdk_type():
     quote = MagicMock(spec=futu.OpenQuoteContext)
-    quote.request_history_kline.return_value = (
+    quote.subscribe.return_value = (0, None)
+    quote.get_cur_kline.return_value = (
         0,
         pd.DataFrame(
             [
@@ -219,7 +387,6 @@ def test_kline_passes_valid_sdk_type():
                 }
             ]
         ),
-        None,
     )
 
     with patch(
@@ -232,8 +399,13 @@ def test_kline_passes_valid_sdk_type():
         )
 
     assert result.exit_code == 0
-    quote.request_history_kline.assert_called_once_with(
+    quote.subscribe.assert_called_once_with(
+        ["HK.00700"],
+        [futu.SubType.K_DAY],
+        subscribe_push=False,
+    )
+    quote.get_cur_kline.assert_called_once_with(
         "HK.00700",
+        1,
         ktype=futu.KLType.K_DAY,
-        max_count=1,
     )

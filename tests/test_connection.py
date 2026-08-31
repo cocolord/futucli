@@ -9,6 +9,7 @@ def test_quote_context_opens_and_closes_for_one_command():
     with (
         patch.object(connection.config, "get_host", return_value="quote-host"),
         patch.object(connection.config, "get_port", return_value=12345),
+        patch.object(connection.config, "get_timeout_seconds", return_value=8),
         patch.object(connection.futu, "OpenQuoteContext", autospec=True) as context_class,
     ):
         context = context_class.return_value
@@ -16,7 +17,13 @@ def test_quote_context_opens_and_closes_for_one_command():
         with connection.quote_context() as opened:
             assert opened is context
 
-        context_class.assert_called_once_with(host="quote-host", port=12345)
+        context_class.assert_called_once_with(
+            host="quote-host",
+            port=12345,
+            is_async_connect=True,
+        )
+        context.set_sync_query_connect_timeout.assert_called_once_with(8)
+        assert context._query_timeout == 8
         context.close.assert_called_once_with()
 
 
@@ -39,6 +46,7 @@ def test_trade_context_opens_and_closes_for_one_command():
     with (
         patch.object(connection.config, "get_host", return_value="trade-host"),
         patch.object(connection.config, "get_port", return_value=23456),
+        patch.object(connection.config, "get_timeout_seconds", return_value=8),
         patch.object(connection.futu, "OpenSecTradeContext", autospec=True) as context_class,
     ):
         context = context_class.return_value
@@ -51,6 +59,8 @@ def test_trade_context_opens_and_closes_for_one_command():
             port=23456,
             security_firm=futu.SecurityFirm.FUTUSECURITIES,
         )
+        context.set_sync_query_connect_timeout.assert_called_once_with(8)
+        assert context._query_timeout == 8
         context.close.assert_called_once_with()
 
 
