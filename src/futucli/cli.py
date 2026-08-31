@@ -29,6 +29,7 @@ app = typer.Typer(
     help="CLI for Futu OpenAPI — market data and trading from the terminal.",
     cls=FutucliGroup,
     invoke_without_command=True,
+    no_args_is_help=True,
 )
 app.add_typer(quote_app, name="quote")
 app.add_typer(trade_app, name="trade")

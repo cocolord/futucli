@@ -35,6 +35,15 @@ def test_root_help_does_not_claim_persistent_disconnect():
     assert "disconnect" not in result.stdout
 
 
+def test_no_arguments_shows_root_help():
+    result = runner.invoke(app, [])
+
+    assert result.exit_code == 2
+    assert "Usage:" in result.stdout
+    assert "quote" in result.stdout
+    assert "trade" in result.stdout
+
+
 def test_version_reports_installed_package_version():
     result = runner.invoke(app, ["--version"])
 
