@@ -50,7 +50,10 @@ def trade_context():
 
 def check_connections() -> dict:
     """Verify quote and trade connectivity, closing both before returning."""
-    with quote_context():
+    with quote_context() as quote:
+        ret, data = quote.get_global_state()
+        if ret != 0:
+            raise ConnectionError(f"Quote connection failed: {data}")
         with trade_context():
             return {
                 "host": config.get_host(),

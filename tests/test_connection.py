@@ -1,4 +1,5 @@
-from unittest.mock import patch
+from contextlib import nullcontext
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -81,6 +82,48 @@ def test_trade_context_opens_and_closes_for_one_command():
         context.set_sync_query_connect_timeout.assert_called_once_with(8)
         assert context._query_timeout == 8
         context.close.assert_called_once_with()
+
+
+def test_check_connections_probes_quote_context_before_reporting_success():
+    quote = MagicMock()
+    quote.get_global_state.return_value = (0, {})
+    trade = MagicMock()
+
+    with (
+        patch.object(
+            connection,
+            "quote_context",
+            return_value=nullcontext(quote),
+        ),
+        patch.object(
+            connection,
+            "trade_context",
+            return_value=nullcontext(trade),
+        ),
+    ):
+        result = connection.check_connections()
+
+    assert result["quote_reachable"] is True
+    assert result["trade_reachable"] is True
+    quote.get_global_state.assert_called_once_with()
+
+
+def test_check_connections_rejects_unreachable_quote_context():
+    quote = MagicMock()
+    quote.get_global_state.return_value = (1, "Connect timeout")
+
+    with (
+        patch.object(
+            connection,
+            "quote_context",
+            return_value=nullcontext(quote),
+        ),
+        patch.object(connection, "trade_context") as trade_context_factory,
+    ):
+        with pytest.raises(ConnectionError, match="Connect timeout"):
+            connection.check_connections()
+
+    trade_context_factory.assert_not_called()
 
 
 @pytest.mark.parametrize(
