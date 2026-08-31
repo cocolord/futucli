@@ -52,28 +52,32 @@ futucli quote ticker HK.00700
 futucli quote ticker HK.00700 --count 5
 
 # View account info
-futucli trade account
+futucli trade account --market US
 
 # List positions
-futucli trade positions
+futucli trade positions --market US
 
 # Place a normal/limit order (simulated by default)
 futucli trade order HK.00700 100 350.0 --side BUY
+futucli trade order US.AMD 10 150.0 --side BUY
 
 # Place a market order
 futucli trade order HK.00700 100 0 --side BUY --order-type MARKET
 
 # List orders
-futucli trade orders
+futucli trade orders --market US
 
 # Cancel an order
-futucli trade cancel <order-id>
+futucli trade cancel <order-id> --market US
 
 ```
 
 Each market-data or trading command opens its own FutuOpenD connection and
 closes it before exiting. `connect` and `status` are connectivity checks; they
-do not create a persistent background session.
+do not create a persistent background session. Orders derive the account market
+from the market-qualified stock code, select a matching account, and display the
+trading environment, market, and account type before submission. Account,
+position, order-list, and cancel commands accept `--market` and default to HK.
 
 ## Configuration
 
@@ -113,11 +117,11 @@ trade_env = "SIMULATE"
 | `futucli quote orderbook CODE` | Order book (bid/ask) |
 | `futucli quote kline CODE` | Historical K-line data |
 | `futucli quote ticker CODE` | Real-time ticker |
-| `futucli trade account` | Account info and funds |
-| `futucli trade positions` | Current positions |
+| `futucli trade account [--market MARKET]` | Account info and funds |
+| `futucli trade positions [--market MARKET]` | Current positions |
 | `futucli trade order CODE QTY PRICE` | Place an order |
-| `futucli trade orders` | List today's orders |
-| `futucli trade cancel ORDER_ID` | Cancel an order |
+| `futucli trade orders [--market MARKET]` | List today's orders |
+| `futucli trade cancel ORDER_ID [--market MARKET]` | Cancel an order |
 
 ## License
 

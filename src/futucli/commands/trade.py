@@ -7,7 +7,7 @@ from rich.console import Console
 from rich.table import Table
 
 from .. import futu
-from ..connection import get_trade_env, trade_context
+from ..connection import get_trade_env, get_trade_market, trade_context
 
 console = Console()
 trade_app = typer.Typer(help="Trading commands")
@@ -23,12 +23,63 @@ class TradeOrderType(str, Enum):
     MARKET = "MARKET"
 
 
+class TradeMarket(str, Enum):
+    HK = "HK"
+    US = "US"
+    CN = "CN"
+    HKCC = "HKCC"
+
+
+def _sdk_trade_market(market):
+    return getattr(futu.TrdMarket, market.value)
+
+
+def _select_stock_account(accounts, trd_env):
+    required_columns = {"acc_id", "trd_env", "acc_type"}
+    if not hasattr(accounts, "columns") or not required_columns.issubset(
+        accounts.columns
+    ):
+        raise ValueError("Futu returned an invalid account list.")
+
+    candidates = accounts[accounts["trd_env"] == trd_env]
+    if trd_env == futu.TrdEnv.SIMULATE:
+        if "sim_acc_type" not in candidates.columns:
+            raise ValueError("Futu did not identify the simulated account type.")
+        candidates = candidates[
+            candidates["sim_acc_type"].isin(
+                {futu.SimAccType.STOCK, futu.SimAccType.STOCK_AND_OPTION}
+            )
+        ]
+
+    if candidates.empty:
+        raise ValueError(
+            f"No stock trading account is available for environment {trd_env}."
+        )
+    return candidates.iloc[0]
+
+
+def _get_stock_account(trade, trd_env):
+    ret, accounts = trade.get_acc_list()
+    if ret != 0:
+        raise ValueError(f"Unable to query accounts: {accounts}")
+    return _select_stock_account(accounts, trd_env)
+
+
 @trade_app.command()
-def account():
+def account(
+    market: TradeMarket = typer.Option(TradeMarket.HK, help="Trading account market"),
+):
     """Show account info and funds."""
     trd_env = get_trade_env()
-    with trade_context() as trade:
-        ret, data = trade.accinfo_query(trd_env=trd_env)
+    with trade_context(filter_trdmarket=_sdk_trade_market(market)) as trade:
+        try:
+            selected_account = _get_stock_account(trade, trd_env)
+        except ValueError as error:
+            console.print(f"[red]Error: {error}[/red]")
+            raise typer.Exit(1) from error
+        ret, data = trade.accinfo_query(
+            trd_env=trd_env, acc_id=int(selected_account["acc_id"])
+        )
     if ret != 0:
         console.print(f"[red]Error: {data}[/red]")
         raise typer.Exit(1)
@@ -44,11 +95,20 @@ def account():
 
 
 @trade_app.command()
-def positions():
+def positions(
+    market: TradeMarket = typer.Option(TradeMarket.HK, help="Trading account market"),
+):
     """List current positions."""
     trd_env = get_trade_env()
-    with trade_context() as trade:
-        ret, data = trade.position_list_query(trd_env=trd_env)
+    with trade_context(filter_trdmarket=_sdk_trade_market(market)) as trade:
+        try:
+            selected_account = _get_stock_account(trade, trd_env)
+        except ValueError as error:
+            console.print(f"[red]Error: {error}[/red]")
+            raise typer.Exit(1) from error
+        ret, data = trade.position_list_query(
+            trd_env=trd_env, acc_id=int(selected_account["acc_id"])
+        )
     if ret != 0:
         console.print(f"[red]Error: {data}[/red]")
         raise typer.Exit(1)
@@ -86,10 +146,28 @@ def order(
 ):
     """Place an order."""
     trd_env = get_trade_env()
+    try:
+        trd_market = get_trade_market(code, trd_env)
+    except ValueError as error:
+        console.print(f"[red]Error: {error}[/red]")
+        raise typer.Exit(1) from error
     trd_side = getattr(futu.TrdSide, side.value)
     sdk_order_type = getattr(futu.OrderType, order_type.value)
 
-    with trade_context() as trade:
+    with trade_context(filter_trdmarket=trd_market) as trade:
+        try:
+            account = _get_stock_account(trade, trd_env)
+        except ValueError as error:
+            console.print(f"[red]Error: {error}[/red]")
+            raise typer.Exit(1) from error
+
+        acc_type = account["acc_type"]
+        sim_acc_type = account.get("sim_acc_type", futu.SimAccType.NONE)
+        route = f"{trd_env} + {trd_market} + account type={acc_type}"
+        if sim_acc_type != futu.SimAccType.NONE:
+            route += f" + sim account type={sim_acc_type}"
+        console.print(f"[yellow]Pre-submit: {route}[/yellow]")
+
         ret, data = trade.place_order(
             price=price,
             qty=qty,
@@ -97,6 +175,7 @@ def order(
             trd_side=trd_side,
             order_type=sdk_order_type,
             trd_env=trd_env,
+            acc_id=int(account["acc_id"]),
         )
     if ret != 0:
         console.print(f"[red]Error: {data}[/red]")
@@ -106,16 +185,25 @@ def order(
 
 
 @trade_app.command()
-def cancel(order_id: str = typer.Argument(..., help="Order ID to cancel")):
+def cancel(
+    order_id: str = typer.Argument(..., help="Order ID to cancel"),
+    market: TradeMarket = typer.Option(TradeMarket.HK, help="Order account market"),
+):
     """Cancel an order by ID."""
     trd_env = get_trade_env()
-    with trade_context() as trade:
+    with trade_context(filter_trdmarket=_sdk_trade_market(market)) as trade:
+        try:
+            selected_account = _get_stock_account(trade, trd_env)
+        except ValueError as error:
+            console.print(f"[red]Error: {error}[/red]")
+            raise typer.Exit(1) from error
         ret, data = trade.modify_order(
             modify_order_op=futu.ModifyOrderOp.CANCEL,
             order_id=order_id,
             qty=0,
             price=0,
             trd_env=trd_env,
+            acc_id=int(selected_account["acc_id"]),
         )
     if ret != 0:
         console.print(f"[red]Error: {data}[/red]")
@@ -125,11 +213,20 @@ def cancel(order_id: str = typer.Argument(..., help="Order ID to cancel")):
 
 
 @trade_app.command()
-def orders():
+def orders(
+    market: TradeMarket = typer.Option(TradeMarket.HK, help="Order account market"),
+):
     """List today's orders."""
     trd_env = get_trade_env()
-    with trade_context() as trade:
-        ret, data = trade.order_list_query(trd_env=trd_env)
+    with trade_context(filter_trdmarket=_sdk_trade_market(market)) as trade:
+        try:
+            selected_account = _get_stock_account(trade, trd_env)
+        except ValueError as error:
+            console.print(f"[red]Error: {error}[/red]")
+            raise typer.Exit(1) from error
+        ret, data = trade.order_list_query(
+            trd_env=trd_env, acc_id=int(selected_account["acc_id"])
+        )
     if ret != 0:
         console.print(f"[red]Error: {data}[/red]")
         raise typer.Exit(1)

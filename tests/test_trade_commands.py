@@ -15,8 +15,25 @@ def trade_context_for(trade):
     yield trade
 
 
+def stock_simulation_accounts(acc_id=987654):
+    return (
+        0,
+        pd.DataFrame(
+            [
+                {
+                    "acc_id": acc_id,
+                    "trd_env": futu.TrdEnv.SIMULATE,
+                    "acc_type": futu.TrdAccType.MARGIN,
+                    "sim_acc_type": futu.SimAccType.STOCK,
+                }
+            ]
+        ),
+    )
+
+
 def test_account_renders_wide_account_row_as_field_value_pairs():
     trade = MagicMock(spec=futu.OpenSecTradeContext)
+    trade.get_acc_list.return_value = stock_simulation_accounts()
     trade.accinfo_query.return_value = (
         0,
         pd.DataFrame(
@@ -49,12 +66,15 @@ def test_account_renders_wide_account_row_as_field_value_pairs():
     assert "cash" in result.stdout
     assert "80000.0" in result.stdout
     assert "market_val" in result.stdout
-    context_factory.assert_called_once_with()
-    trade.accinfo_query.assert_called_once_with(trd_env=futu.TrdEnv.SIMULATE)
+    context_factory.assert_called_once_with(filter_trdmarket=futu.TrdMarket.HK)
+    trade.accinfo_query.assert_called_once_with(
+        trd_env=futu.TrdEnv.SIMULATE, acc_id=987654
+    )
 
 
 def test_order_passes_explicit_valid_enums_to_sdk():
     trade = MagicMock(spec=futu.OpenSecTradeContext)
+    trade.get_acc_list.return_value = stock_simulation_accounts()
     trade.place_order.return_value = (0, pd.DataFrame([{"order_id": "123"}]))
 
     with (
@@ -65,14 +85,14 @@ def test_order_passes_explicit_valid_enums_to_sdk():
         patch(
             "futucli.commands.trade.trade_context",
             return_value=trade_context_for(trade),
-        ),
+        ) as context_factory,
     ):
         result = runner.invoke(
             app,
             [
                 "trade",
                 "order",
-                "HK.00700",
+                "US.AMD",
                 "100",
                 "350.0",
                 "--side",
@@ -83,14 +103,54 @@ def test_order_passes_explicit_valid_enums_to_sdk():
         )
 
     assert result.exit_code == 0
+    assert "SIMULATE + US + account type=MARGIN" in result.stdout
+    assert "sim account type=STOCK" in result.stdout
+    context_factory.assert_called_once_with(filter_trdmarket=futu.TrdMarket.US)
+    trade.get_acc_list.assert_called_once_with()
     trade.place_order.assert_called_once_with(
         price=350.0,
         qty=100,
-        code="HK.00700",
+        code="US.AMD",
         trd_side=futu.TrdSide.SELL,
         order_type=futu.OrderType.MARKET,
         trd_env=futu.TrdEnv.SIMULATE,
+        acc_id=987654,
     )
+
+
+def test_order_does_not_submit_without_a_stock_simulation_account():
+    trade = MagicMock(spec=futu.OpenSecTradeContext)
+    trade.get_acc_list.return_value = (
+        0,
+        pd.DataFrame(
+            [
+                {
+                    "acc_id": 123456,
+                    "trd_env": futu.TrdEnv.SIMULATE,
+                    "acc_type": futu.TrdAccType.MARGIN,
+                    "sim_acc_type": futu.SimAccType.OPTION,
+                }
+            ]
+        ),
+    )
+
+    with (
+        patch(
+            "futucli.commands.trade.get_trade_env",
+            return_value=futu.TrdEnv.SIMULATE,
+        ),
+        patch(
+            "futucli.commands.trade.trade_context",
+            return_value=trade_context_for(trade),
+        ) as context_factory,
+    ):
+        result = runner.invoke(
+            app, ["trade", "order", "US.AMD", "100", "100.0"]
+        )
+
+    assert result.exit_code == 1
+    assert "No stock trading account is available" in result.stdout
+    trade.place_order.assert_not_called()
 
 
 def test_order_rejects_invalid_side_before_opening_connection():
@@ -144,6 +204,7 @@ def test_order_help_documents_normal_as_limit_order():
 
 def test_positions_renders_position_rows():
     trade = MagicMock(spec=futu.OpenSecTradeContext)
+    trade.get_acc_list.return_value = stock_simulation_accounts()
     trade.position_list_query.return_value = (
         0,
         pd.DataFrame(
@@ -168,7 +229,7 @@ def test_positions_renders_position_rows():
         patch(
             "futucli.commands.trade.trade_context",
             return_value=trade_context_for(trade),
-        ),
+        ) as context_factory,
     ):
         result = runner.invoke(app, ["trade", "positions"])
 
@@ -176,11 +237,15 @@ def test_positions_renders_position_rows():
     assert "HK.00700" in result.stdout
     assert "Tencent" in result.stdout
     assert "1000.00" in result.stdout
-    trade.position_list_query.assert_called_once_with(trd_env=futu.TrdEnv.SIMULATE)
+    context_factory.assert_called_once_with(filter_trdmarket=futu.TrdMarket.HK)
+    trade.position_list_query.assert_called_once_with(
+        trd_env=futu.TrdEnv.SIMULATE, acc_id=987654
+    )
 
 
 def test_cancel_passes_sdk_cancel_enum():
     trade = MagicMock(spec=futu.OpenSecTradeContext)
+    trade.get_acc_list.return_value = stock_simulation_accounts()
     trade.modify_order.return_value = (0, pd.DataFrame())
 
     with (
@@ -191,23 +256,26 @@ def test_cancel_passes_sdk_cancel_enum():
         patch(
             "futucli.commands.trade.trade_context",
             return_value=trade_context_for(trade),
-        ),
+        ) as context_factory,
     ):
         result = runner.invoke(app, ["trade", "cancel", "order-123"])
 
     assert result.exit_code == 0
     assert "order-123" in result.stdout
+    context_factory.assert_called_once_with(filter_trdmarket=futu.TrdMarket.HK)
     trade.modify_order.assert_called_once_with(
         modify_order_op=futu.ModifyOrderOp.CANCEL,
         order_id="order-123",
         qty=0,
         price=0,
         trd_env=futu.TrdEnv.SIMULATE,
+        acc_id=987654,
     )
 
 
 def test_orders_renders_today_orders():
     trade = MagicMock(spec=futu.OpenSecTradeContext)
+    trade.get_acc_list.return_value = stock_simulation_accounts()
     trade.order_list_query.return_value = (
         0,
         pd.DataFrame(
@@ -232,7 +300,7 @@ def test_orders_renders_today_orders():
         patch(
             "futucli.commands.trade.trade_context",
             return_value=trade_context_for(trade),
-        ),
+        ) as context_factory,
     ):
         result = runner.invoke(app, ["trade", "orders"])
 
@@ -240,4 +308,28 @@ def test_orders_renders_today_orders():
     assert "order-123" in result.stdout
     assert "HK.00700" in result.stdout
     assert "SUBMITTED" in result.stdout
-    trade.order_list_query.assert_called_once_with(trd_env=futu.TrdEnv.SIMULATE)
+    context_factory.assert_called_once_with(filter_trdmarket=futu.TrdMarket.HK)
+    trade.order_list_query.assert_called_once_with(
+        trd_env=futu.TrdEnv.SIMULATE, acc_id=987654
+    )
+
+
+def test_orders_opens_requested_us_market_context():
+    trade = MagicMock(spec=futu.OpenSecTradeContext)
+    trade.get_acc_list.return_value = stock_simulation_accounts()
+    trade.order_list_query.return_value = (0, pd.DataFrame())
+
+    with (
+        patch(
+            "futucli.commands.trade.get_trade_env",
+            return_value=futu.TrdEnv.SIMULATE,
+        ),
+        patch(
+            "futucli.commands.trade.trade_context",
+            return_value=trade_context_for(trade),
+        ) as context_factory,
+    ):
+        result = runner.invoke(app, ["trade", "orders", "--market", "US"])
+
+    assert result.exit_code == 0
+    context_factory.assert_called_once_with(filter_trdmarket=futu.TrdMarket.US)
