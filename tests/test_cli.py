@@ -1,6 +1,7 @@
 import subprocess
 from unittest.mock import patch
 
+import pytest
 from typer.testing import CliRunner
 
 from futucli.cli import APP_VERSION, GITHUB_REPOSITORY, app
@@ -98,3 +99,21 @@ def test_market_commands_fail_fast_for_invalid_timeout(monkeypatch):
     assert "Configuration error" in result.stdout
     assert "positive\ninteger" in result.stdout
     assert "Traceback" not in result.stdout
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["quote", "--help"],
+        ["quote", "snapshot", "--help"],
+        ["trade", "--help"],
+        ["trade", "order", "--help"],
+    ],
+)
+def test_subcommand_help_ignores_invalid_runtime_timeout(monkeypatch, arguments):
+    monkeypatch.setenv("FUTU_TIMEOUT_SECONDS", "not-a-number")
+
+    result = runner.invoke(app, arguments)
+
+    assert result.exit_code == 0
+    assert "Usage:" in result.stdout

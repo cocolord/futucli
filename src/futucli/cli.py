@@ -8,15 +8,26 @@ import subprocess
 import typer
 from rich.console import Console
 from rich.table import Table
+from typer.core import TyperGroup
 
 from . import config as cfg
 from .commands.quote import quote_app
 from .commands.trade import trade_app
 from .connection import check_connections
 
+class FutucliGroup(TyperGroup):
+    def invoke(self, context):
+        try:
+            return super().invoke(context)
+        except cfg.ConfigurationError as error:
+            console.print(f"[red]Configuration error: {error}[/red]")
+            raise typer.Exit(2) from error
+
+
 app = typer.Typer(
     name="futucli",
     help="CLI for Futu OpenAPI — market data and trading from the terminal.",
+    cls=FutucliGroup,
     invoke_without_command=True,
 )
 app.add_typer(quote_app, name="quote")
@@ -31,8 +42,7 @@ except PackageNotFoundError:
 
 
 @app.callback()
-def validate_runtime_configuration(
-    context: typer.Context,
+def main(
     show_version: bool = typer.Option(
         False,
         "--version",
@@ -40,16 +50,10 @@ def validate_runtime_configuration(
         is_eager=True,
     ),
 ):
-    """Fail fast on invalid connection settings before opening an SDK context."""
+    """Futu OpenAPI command-line interface."""
     if show_version:
         typer.echo(f"futucli {APP_VERSION}")
         raise typer.Exit()
-    if context.invoked_subcommand in {"connect", "status", "quote", "trade"}:
-        try:
-            cfg.get_timeout_seconds()
-        except ValueError as error:
-            console.print(f"[red]Configuration error: {error}[/red]")
-            raise typer.Exit(2) from error
 
 
 @app.command()
@@ -63,6 +67,8 @@ def connect():
         for key, value in info.items():
             table.add_row(key, str(value))
         console.print(table)
+    except cfg.ConfigurationError:
+        raise
     except Exception as error:
         console.print(f"[red]Connection failed: {error}[/red]")
         raise typer.Exit(1) from error

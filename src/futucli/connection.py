@@ -6,8 +6,7 @@ from . import futu
 from . import config
 
 
-def _configure_context(context):
-    timeout = config.get_timeout_seconds()
+def _configure_context(context, timeout):
     context.set_sync_query_connect_timeout(timeout)
     context._query_timeout = timeout
     return context
@@ -16,12 +15,14 @@ def _configure_context(context):
 @contextmanager
 def quote_context():
     """Open a quote connection for one CLI command."""
+    timeout = config.get_timeout_seconds()
     context = _configure_context(
         futu.OpenQuoteContext(
             host=config.get_host(),
             port=config.get_port(),
             is_async_connect=True,
-        )
+        ),
+        timeout,
     )
     try:
         yield context
@@ -32,12 +33,14 @@ def quote_context():
 @contextmanager
 def trade_context():
     """Open a trade connection for one CLI command."""
+    timeout = config.get_timeout_seconds()
     context = _configure_context(
         futu.OpenSecTradeContext(
             host=config.get_host(),
             port=config.get_port(),
             security_firm=futu.SecurityFirm.FUTUSECURITIES,
-        )
+        ),
+        timeout,
     )
     try:
         yield context

@@ -28,11 +28,14 @@ def test_quote_context_opens_and_closes_for_one_command():
 
 
 def test_quote_context_closes_when_command_raises():
-    with patch.object(
-        connection,
-        "futu",
-        autospec=True,
-    ) as futu_module:
+    with (
+        patch.object(connection.config, "get_timeout_seconds", return_value=8),
+        patch.object(
+            connection,
+            "futu",
+            autospec=True,
+        ) as futu_module,
+    ):
         context = futu_module.OpenQuoteContext.return_value
 
         with pytest.raises(RuntimeError, match="command failed"):
@@ -40,6 +43,22 @@ def test_quote_context_closes_when_command_raises():
                 raise RuntimeError("command failed")
 
         context.close.assert_called_once_with()
+
+
+def test_quote_context_validates_timeout_before_opening_sdk_context():
+    with (
+        patch.object(
+            connection.config,
+            "get_timeout_seconds",
+            side_effect=ValueError("invalid timeout"),
+        ),
+        patch.object(connection.futu, "OpenQuoteContext") as context_class,
+    ):
+        with pytest.raises(ValueError, match="invalid timeout"):
+            with connection.quote_context():
+                pass
+
+    context_class.assert_not_called()
 
 
 def test_trade_context_opens_and_closes_for_one_command():

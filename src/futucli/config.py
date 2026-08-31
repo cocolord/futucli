@@ -18,6 +18,10 @@ CONFIG_DIR = Path.home() / ".config" / "futucli"
 CONFIG_FILE = CONFIG_DIR / "config.toml"
 
 
+class ConfigurationError(ValueError):
+    """Raised when a futucli runtime setting is invalid."""
+
+
 def _load_config() -> dict:
     if CONFIG_FILE.exists():
         with open(CONFIG_FILE, "rb") as f:
@@ -48,11 +52,11 @@ def get_timeout_seconds() -> int:
     try:
         timeout = int(value)
     except (TypeError, ValueError) as error:
-        raise ValueError(
+        raise ConfigurationError(
             f"Invalid timeout_seconds {value!r}; expected a positive integer."
         ) from error
     if timeout <= 0:
-        raise ValueError(
+        raise ConfigurationError(
             f"Invalid timeout_seconds {value!r}; expected a positive integer."
         )
     return timeout

@@ -65,7 +65,7 @@ class KlineType(str, Enum):
 
 
 def _optional_value(value):
-    if value is None or value == "N/A" or pd.isna(value):
+    if value is None or (isinstance(value, str) and value == "N/A") or pd.isna(value):
         return None
     return value.item() if hasattr(value, "item") else value
 

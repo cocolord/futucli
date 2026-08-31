@@ -169,6 +169,7 @@ def test_snapshot_csv_outputs_fixed_columns():
                     "name": "CSI 300 ETF",
                     "update_time": "2026-08-24 15:00:00",
                     "last_price": 4.62,
+                    "overnight_price": pd.NA,
                     "prev_close_price": 4.68,
                     "volume": 1000,
                     "high_price": 4.692,
