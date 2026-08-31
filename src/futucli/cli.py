@@ -1,5 +1,6 @@
 """futucli — CLI for Futu OpenAPI."""
 
+from importlib.metadata import PackageNotFoundError, version
 import os
 import shutil
 import subprocess
@@ -7,21 +8,53 @@ import subprocess
 import typer
 from rich.console import Console
 from rich.table import Table
+from typer.core import TyperGroup
 
 from . import config as cfg
 from .commands.quote import quote_app
 from .commands.trade import trade_app
 from .connection import check_connections
 
+class FutucliGroup(TyperGroup):
+    def invoke(self, context):
+        try:
+            return super().invoke(context)
+        except cfg.ConfigurationError as error:
+            console.print(f"[red]Configuration error: {error}[/red]")
+            raise typer.Exit(2) from error
+
+
 app = typer.Typer(
     name="futucli",
     help="CLI for Futu OpenAPI — market data and trading from the terminal.",
+    cls=FutucliGroup,
+    invoke_without_command=True,
+    no_args_is_help=True,
 )
 app.add_typer(quote_app, name="quote")
 app.add_typer(trade_app, name="trade")
 
 console = Console()
 GITHUB_REPOSITORY = "git+https://github.com/cocolord/futucli.git"
+try:
+    APP_VERSION = version("futucli")
+except PackageNotFoundError:
+    APP_VERSION = "unknown"
+
+
+@app.callback()
+def main(
+    show_version: bool = typer.Option(
+        False,
+        "--version",
+        help="Show version and exit.",
+        is_eager=True,
+    ),
+):
+    """Futu OpenAPI command-line interface."""
+    if show_version:
+        typer.echo(f"futucli {APP_VERSION}")
+        raise typer.Exit()
 
 
 @app.command()
@@ -35,6 +68,8 @@ def connect():
         for key, value in info.items():
             table.add_row(key, str(value))
         console.print(table)
+    except cfg.ConfigurationError:
+        raise
     except Exception as error:
         console.print(f"[red]Connection failed: {error}[/red]")
         raise typer.Exit(1) from error

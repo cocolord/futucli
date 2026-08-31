@@ -1,5 +1,6 @@
 """futucli — CLI for Futu OpenAPI."""
 
+import logging
 import os
 import tempfile
 from pathlib import Path
@@ -30,3 +31,8 @@ def _import_futu_with_writable_log_home():
 
 
 futu = _import_futu_with_writable_log_home()
+futu.SysConfig.enable_console_log(False)
+
+from futu.common.ft_logger import logger
+
+logger.console_logger.addHandler(logging.NullHandler())
