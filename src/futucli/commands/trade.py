@@ -34,7 +34,7 @@ def _sdk_trade_market(market):
     return getattr(futu.TrdMarket, market.value)
 
 
-def _select_stock_account(accounts, trd_env):
+def _select_stock_account(accounts, trd_env, acc_id=None):
     required_columns = {"acc_id", "trd_env", "acc_type"}
     if not hasattr(accounts, "columns") or not required_columns.issubset(
         accounts.columns
@@ -51,29 +51,39 @@ def _select_stock_account(accounts, trd_env):
             )
         ]
 
+    if acc_id is not None:
+        candidates = candidates[candidates["acc_id"] == acc_id]
+
     if candidates.empty:
         raise ValueError(
             f"No stock trading account is available for environment {trd_env}."
+            + (f" Requested account: {acc_id}." if acc_id is not None else "")
+        )
+    if len(candidates) != 1:
+        account_ids = ", ".join(str(value) for value in candidates["acc_id"])
+        raise ValueError(
+            f"Multiple matching accounts ({account_ids}); select one with --acc-id."
         )
     return candidates.iloc[0]
 
 
-def _get_stock_account(trade, trd_env):
+def _get_stock_account(trade, trd_env, acc_id=None):
     ret, accounts = trade.get_acc_list()
     if ret != 0:
         raise ValueError(f"Unable to query accounts: {accounts}")
-    return _select_stock_account(accounts, trd_env)
+    return _select_stock_account(accounts, trd_env, acc_id)
 
 
 @trade_app.command()
 def account(
     market: TradeMarket = typer.Option(TradeMarket.HK, help="Trading account market"),
+    acc_id: int | None = typer.Option(None, min=1, help="Select a trading account ID"),
 ):
     """Show account info and funds."""
     trd_env = get_trade_env()
     with trade_context(filter_trdmarket=_sdk_trade_market(market)) as trade:
         try:
-            selected_account = _get_stock_account(trade, trd_env)
+            selected_account = _get_stock_account(trade, trd_env, acc_id)
         except ValueError as error:
             console.print(f"[red]Error: {error}[/red]")
             raise typer.Exit(1) from error
@@ -97,12 +107,13 @@ def account(
 @trade_app.command()
 def positions(
     market: TradeMarket = typer.Option(TradeMarket.HK, help="Trading account market"),
+    acc_id: int | None = typer.Option(None, min=1, help="Select a trading account ID"),
 ):
     """List current positions."""
     trd_env = get_trade_env()
     with trade_context(filter_trdmarket=_sdk_trade_market(market)) as trade:
         try:
-            selected_account = _get_stock_account(trade, trd_env)
+            selected_account = _get_stock_account(trade, trd_env, acc_id)
         except ValueError as error:
             console.print(f"[red]Error: {error}[/red]")
             raise typer.Exit(1) from error
@@ -143,6 +154,7 @@ def order(
         TradeOrderType.NORMAL,
         help="NORMAL (limit/regular) or MARKET",
     ),
+    acc_id: int | None = typer.Option(None, min=1, help="Select a trading account ID"),
 ):
     """Place an order."""
     trd_env = get_trade_env()
@@ -156,7 +168,7 @@ def order(
 
     with trade_context(filter_trdmarket=trd_market) as trade:
         try:
-            account = _get_stock_account(trade, trd_env)
+            account = _get_stock_account(trade, trd_env, acc_id)
         except ValueError as error:
             console.print(f"[red]Error: {error}[/red]")
             raise typer.Exit(1) from error
@@ -188,12 +200,13 @@ def order(
 def cancel(
     order_id: str = typer.Argument(..., help="Order ID to cancel"),
     market: TradeMarket = typer.Option(TradeMarket.HK, help="Order account market"),
+    acc_id: int | None = typer.Option(None, min=1, help="Select a trading account ID"),
 ):
     """Cancel an order by ID."""
     trd_env = get_trade_env()
     with trade_context(filter_trdmarket=_sdk_trade_market(market)) as trade:
         try:
-            selected_account = _get_stock_account(trade, trd_env)
+            selected_account = _get_stock_account(trade, trd_env, acc_id)
         except ValueError as error:
             console.print(f"[red]Error: {error}[/red]")
             raise typer.Exit(1) from error
@@ -215,12 +228,13 @@ def cancel(
 @trade_app.command()
 def orders(
     market: TradeMarket = typer.Option(TradeMarket.HK, help="Order account market"),
+    acc_id: int | None = typer.Option(None, min=1, help="Select a trading account ID"),
 ):
     """List today's orders."""
     trd_env = get_trade_env()
     with trade_context(filter_trdmarket=_sdk_trade_market(market)) as trade:
         try:
-            selected_account = _get_stock_account(trade, trd_env)
+            selected_account = _get_stock_account(trade, trd_env, acc_id)
         except ValueError as error:
             console.print(f"[red]Error: {error}[/red]")
             raise typer.Exit(1) from error

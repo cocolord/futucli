@@ -2,6 +2,7 @@ from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
+import pytest
 from typer.testing import CliRunner
 
 from futucli import futu
@@ -29,6 +30,46 @@ def stock_simulation_accounts(acc_id=987654):
             ]
         ),
     )
+
+
+@pytest.mark.parametrize("command", ["order", "cancel", "account", "positions", "orders"])
+def test_multiple_accounts_require_explicit_selection(command):
+    trade = MagicMock(spec=futu.OpenSecTradeContext)
+    trade.get_acc_list.return_value = (
+        0,
+        pd.concat([stock_simulation_accounts(111)[1], stock_simulation_accounts(222)[1]]),
+    )
+    args = {"order": ["US.AMD", "10", "100"], "cancel": ["order-123"]}.get(command, [])
+    with (
+        patch("futucli.commands.trade.get_trade_env", return_value=futu.TrdEnv.SIMULATE),
+        patch("futucli.commands.trade.trade_context", return_value=trade_context_for(trade)),
+    ):
+        result = runner.invoke(app, ["trade", command, *args])
+    assert result.exit_code == 1
+    assert "--acc-id" in result.stdout
+    assert "111, 222" in result.stdout
+    assert [call[0] for call in trade.method_calls] == ["get_acc_list"]
+
+
+def test_explicit_account_is_bound_to_order_and_environment():
+    trade = MagicMock(spec=futu.OpenSecTradeContext)
+    other = stock_simulation_accounts(333)[1]
+    other["trd_env"] = futu.TrdEnv.REAL
+    trade.get_acc_list.return_value = (
+        0,
+        pd.concat([stock_simulation_accounts(111)[1], stock_simulation_accounts(222)[1], other]),
+    )
+    trade.place_order.return_value = (0, pd.DataFrame([{"order_id": "test-order"}]))
+    with (
+        patch("futucli.commands.trade.get_trade_env", return_value=futu.TrdEnv.SIMULATE),
+        patch("futucli.commands.trade.trade_context", side_effect=lambda **_: trade_context_for(trade)),
+    ):
+        selected = runner.invoke(app, ["trade", "order", "US.AMD", "10", "100", "--acc-id", "222"])
+        mismatch = runner.invoke(app, ["trade", "order", "US.AMD", "10", "100", "--acc-id", "333"])
+    assert selected.exit_code == 0
+    assert mismatch.exit_code == 1
+    trade.place_order.assert_called_once()
+    assert trade.place_order.call_args.kwargs["acc_id"] == 222
 
 
 def test_account_renders_wide_account_row_as_field_value_pairs():

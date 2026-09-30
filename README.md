@@ -78,6 +78,9 @@ do not create a persistent background session. Orders derive the account market
 from the market-qualified stock code, select a matching account, and display the
 trading environment, market, and account type before submission. Account,
 position, order-list, and cancel commands accept `--market` and default to HK.
+All trade commands accept `--acc-id` to select a specific account within that
+market and environment. If multiple accounts match, the command lists their IDs
+and stops until one is selected; it never silently chooses the first account.
 
 ## Configuration
 
