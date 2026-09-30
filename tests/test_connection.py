@@ -75,6 +75,7 @@ def test_trade_context_opens_and_closes_for_one_command():
             assert opened is context
 
         context_class.assert_called_once_with(
+            filter_trdmarket=futu.TrdMarket.HK,
             host="trade-host",
             port=23456,
             security_firm=futu.SecurityFirm.FUTUSECURITIES,
@@ -142,3 +143,22 @@ def test_get_trade_env_rejects_unknown_value():
     with patch.object(connection.config, "get_trade_env", return_value="paper"):
         with pytest.raises(ValueError, match="expected REAL or SIMULATE"):
             connection.get_trade_env()
+
+
+@pytest.mark.parametrize(
+    ("code", "trd_env", "expected"),
+    [
+        pytest.param("US.AMD", futu.TrdEnv.SIMULATE, futu.TrdMarket.US, id="us"),
+        pytest.param("HK.00700", futu.TrdEnv.SIMULATE, futu.TrdMarket.HK, id="hk"),
+        pytest.param("SH.600000", futu.TrdEnv.SIMULATE, futu.TrdMarket.CN, id="cn_simulate"),
+        pytest.param("SZ.000001", futu.TrdEnv.REAL, futu.TrdMarket.HKCC, id="cn_real"),
+    ],
+)
+def test_get_trade_market_routes_market_qualified_codes(code, trd_env, expected):
+    assert connection.get_trade_market(code, trd_env) == expected
+
+
+@pytest.mark.parametrize("code", ["AMD", "SG.D05", "US."])
+def test_get_trade_market_rejects_unroutable_codes(code):
+    with pytest.raises(ValueError):
+        connection.get_trade_market(code, futu.TrdEnv.SIMULATE)

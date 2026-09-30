@@ -31,11 +31,12 @@ def quote_context():
 
 
 @contextmanager
-def trade_context():
+def trade_context(filter_trdmarket=futu.TrdMarket.HK):
     """Open a trade connection for one CLI command."""
     timeout = config.get_timeout_seconds()
     context = _configure_context(
         futu.OpenSecTradeContext(
+            filter_trdmarket=filter_trdmarket,
             host=config.get_host(),
             port=config.get_port(),
             security_firm=futu.SecurityFirm.FUTUSECURITIES,
@@ -71,4 +72,28 @@ def get_trade_env():
         return futu.TrdEnv.SIMULATE
     raise ValueError(
         f"Invalid trade_env {env!r}; expected REAL or SIMULATE."
+    )
+
+
+def get_trade_market(code, trd_env):
+    """Resolve the account market required by a security code."""
+    market_prefix, separator, symbol = code.partition(".")
+    if not separator or not market_prefix or not symbol:
+        raise ValueError(
+            f"Invalid stock code {code!r}; expected a market-qualified code such as US.AMD."
+        )
+
+    market_prefix = market_prefix.upper()
+    if market_prefix == "US":
+        return futu.TrdMarket.US
+    if market_prefix == "HK":
+        return futu.TrdMarket.HK
+    if market_prefix in {"SH", "SZ"}:
+        if trd_env == futu.TrdEnv.REAL:
+            return futu.TrdMarket.HKCC
+        if trd_env == futu.TrdEnv.SIMULATE:
+            return futu.TrdMarket.CN
+
+    raise ValueError(
+        f"Unsupported trading market prefix {market_prefix!r} in stock code {code!r}."
     )
