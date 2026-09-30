@@ -67,6 +67,9 @@ futucli trade order HK.00700 100 0 --side BUY --order-type MARKET
 # List orders
 futucli trade orders --market US
 
+# Read historical fills (read-only; Futu supports REAL accounts only)
+futucli trade history-deals --market US --env REAL --start 2026-09-01 --end 2026-09-30 --json
+
 # Cancel an order
 futucli trade cancel <order-id> --market US
 
@@ -81,6 +84,56 @@ position, order-list, and cancel commands accept `--market` and default to HK.
 All trade commands accept `--acc-id` to select a specific account within that
 market and environment. If multiple accounts match, the command lists their IDs
 and stops until one is selected; it never silently chooses the first account.
+
+## Historical fills
+
+`trade history-deals` reads executed fills through Futu's
+[`history_deal_list_query`](https://openapi.futunn.com/futu-api-doc/en/trade/get-history-order-fill-list.html).
+It does not unlock trading, place orders, or change your configured environment.
+Futu only supports this endpoint for **REAL** accounts. With the default
+SIMULATE configuration, pass `--env REAL` for this read; SIMULATE is rejected
+before connecting, rather than reported as an empty history.
+
+```bash
+# Read all fills in the selected account and market, for inclusive calendar dates
+futucli trade history-deals --market HK --env REAL --start 2026-09-01 --end 2026-09-30
+
+# Select an account and instrument; save machine-readable data for a workbench
+futucli trade history-deals --market HK --env REAL --acc-id 123456 --code HK.00700 \
+  --start 2026-09-01 --end 2026-09-30 --json > fills.json
+
+# Export a spreadsheet-friendly table
+futucli trade history-deals --market US --env REAL --acc-id 123456 \
+  --start 2026-09-01 --end 2026-09-30 --csv > fills.csv
+```
+
+`--market` is required and filters both the eligible accounts and the returned
+fills, including multi-market accounts. Use HK, US, or HKCC (Stock Connect).
+`--code`, if supplied, must match that market. Account selection follows the
+same `--acc-id` rules as other trade commands. The example account ID is fictional.
+Dates select the interval from the first date's midnight up to, but excluding,
+midnight after the last date, in the Futu endpoint's time convention. The Python
+SDK accepts whole-second query bounds: we query through that next midnight and
+filter by `create_time` locally, retaining fills in the last fractional second
+without including the next day. Timestamps are preserved without timezone
+conversion. This command makes one history request and preserves the SDK's row
+order. Futu documents a limit of 10 history requests per account per 30 seconds;
+broker restrictions and errors are reported without automatic retries.
+
+The default output is a table. `--json` returns an object with `schema_version`,
+`acc_id`, `trd_env`, `market`, `start`, `end`, `end_exclusive`, `code`, `retrieved_at_utc`, `count`,
+and `deals`. `--csv` includes `acc_id`, `trd_env`, and `market` on every row.
+Both formats retain the deal/order IDs, instrument, side, quantity, price,
+creation time, execution market, status, counterparty broker and Japanese
+account type where the SDK supplies them. IDs are strings; unavailable or
+non-finite values become JSON null / empty CSV cells. An empty successful query
+returns `count: 0, deals: []` or a CSV header. Errors go to stderr with a nonzero
+exit status and no data on stdout.
+
+Each record is a fill, so partial executions of one order remain separate.
+Preserve `status` when importing cancellations or corrections. This endpoint
+does not provide a complete fee, cash-flow or corporate-action ledger; the
+command does not infer fees, currencies, profits, or a full account return.
 
 ## Configuration
 
@@ -124,6 +177,7 @@ trade_env = "SIMULATE"
 | `futucli trade positions [--market MARKET]` | Current positions |
 | `futucli trade order CODE QTY PRICE` | Place an order |
 | `futucli trade orders [--market MARKET]` | List today's orders |
+| `futucli trade history-deals --market MARKET --start DATE --end DATE` | Read historical fills; supports `--env REAL`, `--acc-id`, `--code`, `--json` or `--csv` |
 | `futucli trade cancel ORDER_ID [--market MARKET]` | Cancel an order |
 
 ## License
